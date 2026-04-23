@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Firebase service account (si fichier JSON utilisé localement)
+serviceAccountKey.json
+firebase-credentials.json
