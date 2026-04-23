@@ -25,24 +25,34 @@ async function handleWebhook(req, res, next) {
       return res.json({ received: true });
     }
 
-    const { clientName, service, date, time } = session.metadata;
-    const reservation = await createReservation({
-      clientName,
-      service,
-      date,
-      time,
-      stripeSessionId: session.id,
-    });
+    console.log('[WEBHOOK] Session reçue:', JSON.stringify(session.metadata));
 
-    const reservationWithEmail = {
-      ...reservation,
-      email: session.customer_details?.email,
-    };
+    const clientName = session.metadata?.clientName || 'Client inconnu';
+    const service = session.metadata?.service || 'Service non spécifié';
+    const date = session.metadata?.date || 'Date non spécifiée';
+    const time = session.metadata?.time || 'Heure non spécifiée';
 
-    await Promise.all([
-      sendConfirmationToClient(reservationWithEmail),
-      sendNotificationToOwner(reservationWithEmail),
-    ]);
+    try {
+      const reservation = await createReservation({
+        clientName,
+        service,
+        date,
+        time,
+        stripeSessionId: session.id,
+      });
+
+      const reservationWithEmail = {
+        ...reservation,
+        email: session.customer_details?.email,
+      };
+
+      await Promise.all([
+        sendConfirmationToClient(reservationWithEmail),
+        sendNotificationToOwner(reservationWithEmail),
+      ]);
+    } catch (err) {
+      console.error('[WEBHOOK] Erreur traitement:', err);
+    }
   }
 
   res.json({ received: true });
