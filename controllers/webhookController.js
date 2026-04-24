@@ -14,7 +14,7 @@ async function handleWebhook(req, res, next) {
     );
   } catch (err) {
     console.error(`[WEBHOOK] Signature invalide : ${err.message}`);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    return res.status(400).send('Webhook Error');
   }
 
   if (event.type === 'checkout.session.completed') {
