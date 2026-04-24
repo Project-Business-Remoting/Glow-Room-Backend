@@ -14,13 +14,18 @@ app.use('/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json());
 
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.FRONTEND_URL
-    : '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+// CORS — exclut /webhook qui est appelé par Stripe
+// directement (pas un navigateur)
+app.use((req, res, next) => {
+  if (req.path === '/webhook') return next();
+  cors({
+    origin: process.env.NODE_ENV === 'production'
+      ? process.env.FRONTEND_URL
+      : '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })(req, res, next);
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
