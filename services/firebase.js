@@ -5,8 +5,10 @@ if (!admin.apps.length) {
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      // Les \n littéraux dans la variable d'env doivent être convertis
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      privateKey: process.env.FIREBASE_PRIVATE_KEY
+        ?.replace(/\\n/g, '\n')
+        ?.replace(/^"/, '')
+        ?.replace(/"$/, ''),
     }),
   });
 }
