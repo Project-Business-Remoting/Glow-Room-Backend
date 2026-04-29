@@ -3,17 +3,10 @@ const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 
-const checkoutRouter = require("./routes/checkout");
-const webhookRouter = require("./routes/webhook");
 const reservationRouter = require("./routes/reservation");
 const contactRouter = require("./routes/contact");
+const blockedSlotsRouter = require("./routes/blockedSlots");
 const { getSlotsDisponibles } = require("./controllers/reservationController");
-
-const checkoutLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: "Trop de tentatives, réessayez dans 15 minutes" },
-});
 
 const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -24,20 +17,14 @@ const contactLimiter = rateLimit({
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// /webhook doit recevoir le raw body AVANT express.json()
-app.use("/webhook", express.raw({ type: "application/json" }));
-
 app.use(express.json());
 
-// CORS — exclut /webhook qui est appelé par Stripe
-// directement (pas un navigateur)
 app.use((req, res, next) => {
-  if (req.path === "/webhook") return next();
   cors({
     origin:
       process.env.NODE_ENV === "production" ? process.env.FRONTEND_URL : "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Password"],
   })(req, res, next);
 });
 
@@ -48,9 +35,8 @@ app.get("/health", (req, res) => {
 // Alias historique appelé par le frontend
 app.get("/slots-disponibles", getSlotsDisponibles);
 
-app.use("/create-checkout-session", checkoutLimiter, checkoutRouter);
-app.use("/webhook", webhookRouter);
 app.use("/reservation", reservationRouter);
+app.use("/bloquer-creneau", blockedSlotsRouter);
 app.use("/contact", contactLimiter, contactRouter);
 
 app.use((req, res) => {

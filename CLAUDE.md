@@ -3,7 +3,7 @@
 ## Contexte
 
 Backend Node.js pour le site Glow Room Hair (Ottawa–Gatineau).
-Gère uniquement les paiements Stripe, les réservations et les emails.
+Gère les réservations (Interac e-Transfer) et les emails.
 Projet client réel — ne jamais exposer de clés ou données sensibles.
 
 ## Stack technique
@@ -11,7 +11,6 @@ Projet client réel — ne jamais exposer de clés ou données sensibles.
 - Node.js 18+ LTS
 - Express.js 4.x
 - Firebase Admin SDK (Firestore)
-- Stripe SDK (latest)
 - Nodemailer 6.x
 - dotenv, cors
 
@@ -22,42 +21,39 @@ Jamais de logique métier dans les routes.
 
 ## API Endpoints
 
-POST /create-checkout-session → crée session Stripe + retourne URL
-POST /webhook → reçoit événements Stripe (signature obligatoire)
+GET /slots-disponibles?date=YYYY-MM-DD → créneaux indisponibles (réservés + bloqués)
+POST /reservation → crée une demande (status: en_attente)
+PATCH /reservation/:id/confirmer → confirme (admin)
+PATCH /reservation/:id/annuler → annule (admin)
+POST /bloquer-creneau → bloque un créneau (admin)
 GET /reservation/:id → récupère une réservation par ID
 GET /health → healthcheck Render/Railway
 
 ## Sécurité — RÈGLES ABSOLUES
 
 - .env jamais committé (dans .gitignore)
-- Webhook TOUJOURS vérifié via stripe.webhooks.constructEvent()
-- Aucune réservation créée sans confirmation webhook valide
+- Les endpoints admin exigent `ADMIN_PASSWORD` (Authorization Bearer ou header `X-Admin-Password`)
 - CORS accepte uniquement FRONTEND_URL en production
 - Données sensibles (email, téléphone) jamais loggées
-- Raw body requis pour /webhook (express.raw())
 
 ## Variables d'environnement requises
 
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
+ADMIN_PASSWORD=
 FIREBASE_PROJECT_ID=
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 EMAIL_FROM=
 EMAIL_OWNER=Tinidk17@gmail.com
+INTERAC_EMAIL=
 FRONTEND_URL=https://glowroom.ca
 PORT=3000
 
-## Flux Stripe complet
+## Flux Interac
 
-1. Frontend POST /create-checkout-session avec données réservation
-2. Backend crée session Stripe avec metadata + success_url + cancel_url
-3. Backend retourne { url } au frontend
-4. Frontend redirige vers Stripe Checkout
-5. Client paie 15$
-6. Stripe POST /webhook checkout.session.completed
-7. Backend vérifie signature → enregistre en Firestore → envoie emails
-8. Client redirigé vers /success
+1. Frontend POST /reservation
+2. Backend enregistre la demande (`en_attente`) + envoie email instructions Interac à la cliente
+3. Propriétaire confirme via dashboard → PATCH /reservation/:id/confirmer
+4. Backend passe `confirmé` + envoie email de confirmation à la cliente
 
 ## Politiques salon
 

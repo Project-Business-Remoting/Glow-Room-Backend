@@ -1,12 +1,11 @@
 # Glow Room Hair — Backend
 
-API Node.js/Express pour la gestion des réservations avec dépôt Stripe.
+API Node.js/Express pour la gestion des réservations (Interac e-Transfer) + emails.
 
 ## Prérequis
 
 - Node.js 18+ LTS
 - Un projet Firebase (Firestore activé)
-- Un compte Stripe (clés API + webhook)
 - Un compte SMTP (Gmail, Mailgun, etc.)
 
 ## Installation
@@ -19,22 +18,22 @@ cp .env.example .env
 
 ## Variables d'environnement
 
-| Variable | Description |
-|---|---|
-| `STRIPE_SECRET_KEY` | Clé secrète Stripe (`sk_live_...` ou `sk_test_...`) |
-| `STRIPE_WEBHOOK_SECRET` | Secret du webhook Stripe (`whsec_...`) |
-| `FIREBASE_PROJECT_ID` | ID du projet Firebase |
-| `FIREBASE_CLIENT_EMAIL` | Email du compte de service Firebase |
-| `FIREBASE_PRIVATE_KEY` | Clé privée du compte de service (avec `\n` littéraux) |
-| `EMAIL_HOST` | Serveur SMTP (ex. `smtp.gmail.com`) |
-| `EMAIL_PORT` | Port SMTP (`587` pour TLS, `465` pour SSL) |
-| `EMAIL_USER` | Identifiant SMTP |
-| `EMAIL_PASS` | Mot de passe SMTP |
-| `EMAIL_FROM` | Expéditeur affiché |
-| `EMAIL_OWNER` | Email du salon pour les notifications |
-| `FRONTEND_URL` | URL du frontend (`https://glowroom.ca`) |
-| `PORT` | Port du serveur (défaut : `3000`) |
-| `NODE_ENV` | `production` ou `development` |
+| Variable                | Description                                                  |
+| ----------------------- | ------------------------------------------------------------ |
+| `FIREBASE_PROJECT_ID`   | ID du projet Firebase                                        |
+| `FIREBASE_CLIENT_EMAIL` | Email du compte de service Firebase                          |
+| `FIREBASE_PRIVATE_KEY`  | Clé privée du compte de service (avec `\n` littéraux)        |
+| `EMAIL_HOST`            | Serveur SMTP (ex. `smtp.gmail.com`)                          |
+| `EMAIL_PORT`            | Port SMTP (`587` pour TLS, `465` pour SSL)                   |
+| `EMAIL_USER`            | Identifiant SMTP                                             |
+| `EMAIL_PASS`            | Mot de passe SMTP                                            |
+| `EMAIL_FROM`            | Expéditeur affiché                                           |
+| `EMAIL_OWNER`           | Email du salon pour les notifications                        |
+| `INTERAC_EMAIL`         | Email de réception du dépôt Interac (défaut : `EMAIL_OWNER`) |
+| `ADMIN_PASSWORD`        | Mot de passe pour les endpoints admin                        |
+| `FRONTEND_URL`          | URL du frontend (`https://glowroom.ca`)                      |
+| `PORT`                  | Port du serveur (défaut : `3000`)                            |
+| `NODE_ENV`              | `production` ou `development`                                |
 
 ## Lancement
 
@@ -48,50 +47,24 @@ npm run dev
 
 ## Endpoints
 
-| Méthode | Route | Description |
-|---|---|---|
-| `POST` | `/create-checkout-session` | Crée une session Stripe Checkout |
-| `POST` | `/webhook` | Reçoit les événements Stripe |
-| `GET` | `/reservation/:id` | Récupère une réservation par ID |
-| `GET` | `/health` | Healthcheck |
+| Méthode | Route                                | Description                                             |
+| ------- | ------------------------------------ | ------------------------------------------------------- |
+| `GET`   | `/slots-disponibles?date=YYYY-MM-DD` | Renvoie les créneaux indisponibles (réservés + bloqués) |
+| `POST`  | `/reservation`                       | Crée une demande de réservation (statut `en_attente`)   |
+| `PATCH` | `/reservation/:id/confirmer`         | Confirme (admin) + email client                         |
+| `PATCH` | `/reservation/:id/annuler`           | Annule (admin) + email client                           |
+| `POST`  | `/bloquer-creneau`                   | Bloque un créneau (admin)                               |
+| `GET`   | `/reservation/:id`                   | Récupère une réservation par ID                         |
+| `GET`   | `/health`                            | Healthcheck                                             |
 
-### POST /create-checkout-session
+## Flux complet (Interac)
 
-**Body JSON :**
-```json
-{
-  "clientName": "Marie Dupont",
-  "service": "Tresses box braids",
-  "date": "2024-06-15",
-  "time": "10:00"
-}
-```
-
-**Réponse :**
-```json
-{ "url": "https://checkout.stripe.com/pay/..." }
-```
-
-## Flux complet
-
-1. Le frontend POST `/create-checkout-session` avec les données de réservation
-2. Le backend crée une session Stripe et retourne `{ url }`
-3. Le frontend redirige le client vers l'URL Stripe
-4. Le client paie 15 $
-5. Stripe POST `/webhook` avec l'événement `checkout.session.completed`
-6. Le backend vérifie la signature → enregistre en Firestore → envoie les emails
-7. Le client est redirigé vers `/success`
-
-## Configuration du webhook Stripe
-
-Dans le dashboard Stripe → Webhooks → Ajouter un endpoint :
-- URL : `https://votre-domaine.com/webhook`
-- Événement à écouter : `checkout.session.completed`
-
-Pour les tests en local :
-```bash
-stripe listen --forward-to localhost:3000/webhook
-```
+1. Le frontend POST `/reservation` avec les infos client + date + créneau
+2. Le backend enregistre en Firestore (`status: en_attente`) et envoie :
+   - email à la cliente avec instructions Interac
+   - email à la propriétaire (notification)
+3. La propriétaire confirme le paiement via le dashboard → `PATCH /reservation/:id/confirmer`
+4. Le backend passe `status: confirmé` et envoie l’email de confirmation à la cliente
 
 ## Déploiement (Render / Railway)
 
