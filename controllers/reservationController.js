@@ -3,6 +3,7 @@ const {
   createReservation,
   getBusySlotsByDate,
   getReservationById,
+  listReservationsByDateRange,
   updateReservation,
 } = require("../services/reservationModel");
 
@@ -17,6 +18,29 @@ const ALLOWED_SLOTS = ["09:00", "16:00"];
 
 function _isValidIsoDate(date) {
   return typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date);
+}
+
+async function listReservationsAdmin(req, res, next) {
+  try {
+    const start = req.query?.start ? String(req.query.start) : null;
+    const end = req.query?.end ? String(req.query.end) : null;
+
+    if (start && !_isValidIsoDate(start)) {
+      return res
+        .status(400)
+        .json({ error: "start invalide (YYYY-MM-DD attendu)" });
+    }
+    if (end && !_isValidIsoDate(end)) {
+      return res
+        .status(400)
+        .json({ error: "end invalide (YYYY-MM-DD attendu)" });
+    }
+
+    const reservations = await listReservationsByDateRange({ start, end });
+    return res.json({ reservations });
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function getReservation(req, res, next) {
@@ -182,4 +206,5 @@ module.exports = {
   cancelReservation,
   getSlotsDisponibles,
   blockSlotRequest,
+  listReservationsAdmin,
 };

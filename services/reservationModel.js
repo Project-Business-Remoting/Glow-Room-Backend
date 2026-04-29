@@ -50,6 +50,22 @@ async function listReservationsByDate(date) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+async function listReservationsByDateRange({ start, end }) {
+  let query = db.collection(COLLECTION);
+
+  if (start && end) {
+    query = query.where("date", ">=", start).where("date", "<=", end);
+  } else if (start) {
+    query = query.where("date", ">=", start);
+  } else if (end) {
+    query = query.where("date", "<=", end);
+  }
+
+  const snap = await query.get();
+  if (snap.empty) return [];
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 async function listBlockedSlotsByDate(date) {
   const snap = await db
     .collection(BLOCKS_COLLECTION)
@@ -99,6 +115,7 @@ module.exports = {
   createReservation,
   updateReservation,
   listReservationsByDate,
+  listReservationsByDateRange,
   listBlockedSlotsByDate,
   blockSlot,
   getBusySlotsByDate,

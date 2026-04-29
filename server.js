@@ -6,6 +6,7 @@ const rateLimit = require("express-rate-limit");
 const reservationRouter = require("./routes/reservation");
 const contactRouter = require("./routes/contact");
 const blockedSlotsRouter = require("./routes/blockedSlots");
+const adminRouter = require("./routes/admin");
 const { getSlotsDisponibles } = require("./controllers/reservationController");
 
 const contactLimiter = rateLimit({
@@ -37,6 +38,7 @@ app.get("/slots-disponibles", getSlotsDisponibles);
 
 app.use("/reservation", reservationRouter);
 app.use("/bloquer-creneau", blockedSlotsRouter);
+app.use("/admin", adminRouter);
 app.use("/contact", contactLimiter, contactRouter);
 
 app.use((req, res) => {
