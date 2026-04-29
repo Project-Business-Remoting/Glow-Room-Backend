@@ -6,6 +6,66 @@ let _transporter = null;
 let _verifyPromise = null;
 let _lastVerifyError = null;
 
+function _useResend() {
+  return Boolean(process.env.RESEND_API_KEY);
+}
+
+function _resendConfig() {
+  const apiKey = process.env.RESEND_API_KEY;
+  // Resend impose souvent un sender vérifié. Pour tests rapides, utiliser onboarding@resend.dev.
+  const from = process.env.RESEND_FROM || process.env.EMAIL_FROM;
+  const owner = process.env.EMAIL_OWNER;
+  return { apiKey, from, owner };
+}
+
+function _isResendConfigured() {
+  const { apiKey, from } = _resendConfig();
+  return Boolean(apiKey && from);
+}
+
+async function _resendSendMail(payload, label) {
+  const { apiKey, from } = _resendConfig();
+
+  if (!_isResendConfigured()) {
+    console.error(
+      `[EMAIL] ${label}: Resend non configuré (RESEND_API_KEY + RESEND_FROM ou EMAIL_FROM requis)`,
+    );
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+
+  try {
+    const to = payload?.to;
+    const subject = payload?.subject;
+    const html = payload?.html;
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to,
+        subject,
+        html,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      const msg = text ? text.slice(0, 300) : `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function _esc(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -85,6 +145,23 @@ async function _verifyOnce() {
 }
 
 async function checkSmtpConnection() {
+  if (_useResend()) {
+    const { from, owner } = _resendConfig();
+    const configured = _isResendConfigured();
+    return {
+      provider: "resend",
+      configured,
+      ok: null,
+      error: configured ? null : "Resend non configuré",
+      host: null,
+      port: null,
+      secure: null,
+      user: null,
+      from,
+      owner,
+    };
+  }
+
   const { host, port, user, from, owner, secure } = _emailConfig();
   const configured = _isEmailConfigured();
 
@@ -106,6 +183,7 @@ async function checkSmtpConnection() {
   const ok = await _verifyOnce();
 
   return {
+    provider: "smtp",
     configured: true,
     ok: Boolean(ok),
     error: ok ? null : _lastVerifyError || "SMTP verify failed",
@@ -119,6 +197,19 @@ async function checkSmtpConnection() {
 }
 
 async function _sendMail(payload, label) {
+  if (_useResend()) {
+    try {
+      await _resendSendMail(payload, label);
+    } catch (err) {
+      console.error(
+        `[EMAIL] ${label} failed (provider=resend):`,
+        err && err.message ? err.message : err,
+      );
+      throw err;
+    }
+    return;
+  }
+
   if (!_isEmailConfigured()) {
     console.error(
       `[EMAIL] ${label}: email non configuré (EMAIL_HOST/USER/PASS/FROM/OWNER requis)`,
@@ -139,6 +230,24 @@ async function _sendMail(payload, label) {
     );
     throw err;
   }
+}
+
+async function sendTestEmail({ to } = {}) {
+  const target = to || process.env.EMAIL_OWNER;
+  if (!target) {
+    throw new Error("EMAIL_OWNER manquant (ou fournissez 'to')");
+  }
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: target,
+      subject: "Test email — Glow Room Backend",
+      html: `<p>Test email envoyé depuis Glow Room Backend.</p><p>Date: ${_esc(
+        new Date().toISOString(),
+      )}</p>`,
+    },
+    "Test email",
+  );
 }
 
 async function sendInteracInstructionsToClient(reservation) {
@@ -263,4 +372,5 @@ module.exports = {
   sendReservationCancelledToClient,
   sendNotificationToOwner,
   checkSmtpConnection,
+  sendTestEmail,
 };
