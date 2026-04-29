@@ -12,6 +12,7 @@ const {
   sendReservationCancelledToClient,
   sendReservationConfirmedToClient,
   sendNotificationToOwner,
+  sendPaymentTimeoutNotificationToOwner,
 } = require("../services/email");
 
 const ALLOWED_SLOTS = ["09:00", "16:00"];
@@ -109,6 +110,18 @@ async function createReservationRequest(req, res, next) {
       console.error("[EMAIL] Notification owner:", err.message),
     );
 
+    // Mettre en place un rappel dans 15 minutes pour la propriétaire
+    setTimeout(async () => {
+      try {
+        const checkRes = await getReservationById(reservation.id);
+        if (checkRes && checkRes.status === "en_attente") {
+          await sendPaymentTimeoutNotificationToOwner(checkRes);
+        }
+      } catch (err) {
+        console.error("[TIMEOUT] Erreur vérification 15min:", err.message);
+      }
+    }, 15 * 60 * 1000);
+
     return res.status(201).json({ id: reservation.id });
   } catch (err) {
     next(err);
@@ -143,6 +156,7 @@ async function confirmReservation(req, res, next) {
 async function cancelReservation(req, res, next) {
   try {
     const { id } = req.params;
+    const { reason } = req.body || {};
     const reservation = await getReservationById(id);
     if (!reservation) {
       return res.status(404).json({ error: "Réservation introuvable" });
@@ -152,6 +166,8 @@ async function cancelReservation(req, res, next) {
       status: "annulé",
       cancelledAt: new Date().toISOString(),
     });
+
+    if (reason) updated.cancelReason = reason;
 
     sendReservationCancelledToClient(updated).catch((err) =>
       console.error("[EMAIL] Annulation client:", err.message),
@@ -175,6 +191,19 @@ async function blockSlotRequest(req, res, next) {
     }
     if (!ALLOWED_SLOTS.includes(String(slot || ""))) {
       return res.status(400).json({ error: "Créneau invalide" });
+    }
+
+    // Annuler les réservations existantes pour ce créneau
+    const allRes = await listReservationsByDateRange({ start: date, end: date });
+    const conflicts = allRes.filter(r => (r.slot === slot || r.time === slot) && r.status !== "annulé");
+    
+    for (const conflict of conflicts) {
+      const updated = await updateReservation(conflict.id, {
+        status: "annulé",
+        cancelledAt: new Date().toISOString(),
+      });
+      updated.cancelReason = "Le créneau a dû être bloqué par le salon.";
+      sendReservationCancelledToClient(updated).catch(e => console.error("[EMAIL] Auto-cancel:", e.message));
     }
 
     const blocked = await blockSlot({ date, slot, reason: reason || null });

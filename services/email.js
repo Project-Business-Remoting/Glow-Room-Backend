@@ -301,6 +301,27 @@ async function sendNotificationToOwner(reservation) {
   );
 }
 
+async function sendPaymentTimeoutNotificationToOwner(reservation) {
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: process.env.EMAIL_OWNER,
+      subject: `⚠️ Délai Interac dépassé — ${reservation.clientName}`,
+      html: `
+        <h2>Délai de paiement dépassé (15 min)</h2>
+        <p>La réservation de <strong>${_esc(reservation.clientName)}</strong> (ID: ${_esc(reservation.id)}) a été faite il y a 15 minutes.</p>
+        <p>Veuillez vérifier vos e-Transfers. Si aucun paiement n'a été reçu, allez sur votre espace Admin pour <strong>Annuler</strong> cette réservation et libérer le créneau.</p>
+        <ul>
+          <li><strong>Service :</strong> ${_esc(reservation.service)}</li>
+          <li><strong>Date :</strong> ${_esc(reservation.date)}</li>
+          <li><strong>Heure :</strong> ${_esc(reservation.time || reservation.slot)}</li>
+        </ul>
+      `,
+    },
+    "Notification timeout owner",
+  );
+}
+
 function buildInteracInstructionsEmail(r) {
   const interacEmail = process.env.INTERAC_EMAIL || process.env.EMAIL_OWNER;
   return `
@@ -310,6 +331,9 @@ function buildInteracInstructionsEmail(r) {
       Pour confirmer votre rendez-vous, veuillez envoyer un dépôt de
       <strong>${_moneyCADFromCents(DEPOSIT_CENTS)}</strong> via <strong>Interac e-Transfer</strong>
       à <strong>${_esc(interacEmail)}</strong>.
+    </p>
+    <p style="color: #d9534f; font-weight: bold; padding: 10px; border: 1px solid #d9534f; border-radius: 4px;">
+      ⚠️ IMPORTANT : Vous avez 15 minutes pour effectuer le virement. Passé ce délai, le créneau sera automatiquement remis à disposition.
     </p>
     <ul>
       <li><strong>Service :</strong> ${_esc(r.service)}</li>
@@ -338,9 +362,14 @@ function buildConfirmedEmail(r) {
 }
 
 function buildCancelledEmail(r) {
+  const reasonText = r.cancelReason 
+    ? `<p><strong>Raison :</strong> ${_esc(r.cancelReason)}</p>`
+    : `<p><strong>Raison :</strong> Délai de paiement dépassé ou annulation à votre demande.</p>`;
+
   return `
     <h2>Réservation annulée</h2>
     <p>Bonjour ${_esc(r.clientName)}, votre réservation a été annulée.</p>
+    ${reasonText}
     <ul>
       <li><strong>Service :</strong> ${_esc(r.service)}</li>
       <li><strong>Date :</strong> ${_esc(r.date)}</li>
@@ -371,6 +400,7 @@ module.exports = {
   sendReservationConfirmedToClient,
   sendReservationCancelledToClient,
   sendNotificationToOwner,
+  sendPaymentTimeoutNotificationToOwner,
   checkSmtpConnection,
   sendTestEmail,
 };
