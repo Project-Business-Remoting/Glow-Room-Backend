@@ -2,6 +2,10 @@ const nodemailer = require("nodemailer");
 
 const DEPOSIT_CENTS = 1500;
 
+let _transporter = null;
+let _verifyPromise = null;
+let _lastVerifyError = null;
+
 function _esc(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -15,53 +19,177 @@ function _moneyCADFromCents(cents) {
   return `${(cents / 100).toFixed(2).replace(".", ",")} $ CAD`;
 }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT) || 587,
-  secure: process.env.EMAIL_PORT === "465",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+function _emailConfig() {
+  const host = process.env.EMAIL_HOST;
+  const port = Number(process.env.EMAIL_PORT) || 587;
+  const user = process.env.EMAIL_USER;
+  // Render/Gmail: l'UI affiche souvent l'app password avec espaces; on normalise.
+  const pass = (process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+  const from = process.env.EMAIL_FROM;
+  const owner = process.env.EMAIL_OWNER;
+  const secure = port === 465;
+
+  return { host, port, user, pass, from, owner, secure };
+}
+
+function _isEmailConfigured() {
+  const { host, user, pass, from, owner } = _emailConfig();
+  return Boolean(host && user && pass && from && owner);
+}
+
+function _getTransporter() {
+  if (_transporter) return _transporter;
+
+  const { host, port, user, pass, secure } = _emailConfig();
+
+  _transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    // Timeouts plus courts pour diagnostiquer rapidement en prod
+    connectionTimeout: 12_000,
+    greetingTimeout: 12_000,
+    socketTimeout: 20_000,
+    // 587 => STARTTLS
+    requireTLS: port === 587,
+    tls: {
+      // SNI
+      servername: host,
+    },
+  });
+
+  return _transporter;
+}
+
+async function _verifyOnce() {
+  if (_verifyPromise) return _verifyPromise;
+  _verifyPromise = (async () => {
+    if (!_isEmailConfigured()) return false;
+    try {
+      const transporter = _getTransporter();
+      await transporter.verify();
+      _lastVerifyError = null;
+      return true;
+    } catch (err) {
+      const { host, port, user } = _emailConfig();
+      _lastVerifyError = err && err.message ? err.message : String(err);
+      console.error(
+        `[EMAIL] SMTP verify failed (host=${host}, port=${port}, user=${user}):`,
+        err && err.message ? err.message : err,
+      );
+      return false;
+    }
+  })();
+  return _verifyPromise;
+}
+
+async function checkSmtpConnection() {
+  const { host, port, user, from, owner, secure } = _emailConfig();
+  const configured = _isEmailConfigured();
+
+  if (!configured) {
+    return {
+      configured: false,
+      ok: false,
+      error:
+        "Email non configuré (EMAIL_HOST/EMAIL_PORT/EMAIL_USER/EMAIL_PASS/EMAIL_FROM/EMAIL_OWNER)",
+      host,
+      port,
+      secure,
+      user,
+      from,
+      owner,
+    };
+  }
+
+  const ok = await _verifyOnce();
+
+  return {
+    configured: true,
+    ok: Boolean(ok),
+    error: ok ? null : _lastVerifyError || "SMTP verify failed",
+    host,
+    port,
+    secure,
+    user,
+    from,
+    owner,
+  };
+}
+
+async function _sendMail(payload, label) {
+  if (!_isEmailConfigured()) {
+    console.error(
+      `[EMAIL] ${label}: email non configuré (EMAIL_HOST/USER/PASS/FROM/OWNER requis)`,
+    );
+    return;
+  }
+
+  await _verifyOnce();
+  const transporter = _getTransporter();
+
+  try {
+    await transporter.sendMail(payload);
+  } catch (err) {
+    const { host, port, user } = _emailConfig();
+    console.error(
+      `[EMAIL] ${label} failed (host=${host}, port=${port}, user=${user}):`,
+      err && err.message ? err.message : err,
+    );
+    throw err;
+  }
+}
 
 async function sendInteracInstructionsToClient(reservation) {
   if (!reservation?.email) return;
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: reservation.email,
-    subject: "Instructions Interac — Glow Room Hair",
-    html: buildInteracInstructionsEmail(reservation),
-  });
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: reservation.email,
+      subject: "Instructions Interac — Glow Room Hair",
+      html: buildInteracInstructionsEmail(reservation),
+    },
+    "Instructions client",
+  );
 }
 
 async function sendReservationConfirmedToClient(reservation) {
   if (!reservation?.email) return;
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: reservation.email,
-    subject: "Réservation confirmée — Glow Room Hair",
-    html: buildConfirmedEmail(reservation),
-  });
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: reservation.email,
+      subject: "Réservation confirmée — Glow Room Hair",
+      html: buildConfirmedEmail(reservation),
+    },
+    "Confirmation client",
+  );
 }
 
 async function sendReservationCancelledToClient(reservation) {
   if (!reservation?.email) return;
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: reservation.email,
-    subject: "Réservation annulée — Glow Room Hair",
-    html: buildCancelledEmail(reservation),
-  });
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: reservation.email,
+      subject: "Réservation annulée — Glow Room Hair",
+      html: buildCancelledEmail(reservation),
+    },
+    "Annulation client",
+  );
 }
 
 async function sendNotificationToOwner(reservation) {
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to: process.env.EMAIL_OWNER,
-    subject: `Nouvelle réservation — ${reservation.clientName}`,
-    html: buildOwnerEmail(reservation),
-  });
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: process.env.EMAIL_OWNER,
+      subject: `Nouvelle réservation — ${reservation.clientName}`,
+      html: buildOwnerEmail(reservation),
+    },
+    "Notification owner",
+  );
 }
 
 function buildInteracInstructionsEmail(r) {
@@ -134,4 +262,5 @@ module.exports = {
   sendReservationConfirmedToClient,
   sendReservationCancelledToClient,
   sendNotificationToOwner,
+  checkSmtpConnection,
 };
