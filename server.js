@@ -47,7 +47,7 @@ app.use((req, res, next) => {
   cors({
     origin:
       process.env.NODE_ENV === "production" ? process.env.FRONTEND_URL : "*",
-    methods: ["GET", "POST", "PATCH"],
+    methods: ["GET", "POST", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Password"],
   })(req, res, next);
 });
