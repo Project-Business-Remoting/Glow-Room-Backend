@@ -48,8 +48,8 @@ describe('moneyCADFromCents', () => {
     expect(moneyCADFromCents(2500)).toBe('25,00 $ CAD');
   });
 
-  test('convertit 1500 centimes en 15,00 $ CAD', () => {
-    expect(moneyCADFromCents(1500)).toBe('15,00 $ CAD');
+  test('convertit 2500 centimes en 25,00 $ CAD', () => {
+    expect(moneyCADFromCents(2500)).toBe('25,00 $ CAD');
   });
 
   test('retourne une chaîne vide si non-number', () => {

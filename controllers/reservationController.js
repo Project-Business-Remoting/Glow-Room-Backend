@@ -140,7 +140,7 @@ async function confirmReservation(req, res, next) {
 
     const updated = await updateReservation(id, {
       status: "confirmé",
-      amountPaid: 1500,
+      amountPaid: 2500,
       confirmedAt: new Date().toISOString(),
     });
 

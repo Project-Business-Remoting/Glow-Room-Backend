@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-const DEPOSIT_CENTS = 1500;
+const DEPOSIT_CENTS = 2500;
 
 let _transporter = null;
 let _verifyPromise = null;
@@ -442,20 +442,30 @@ function buildCancelledEmail(r) {
   `;
 }
 
-function buildOwnerEmail(r) {
+function buildContactEmail({ nom, email, telephone, message }) {
   return `
-    <h2>Nouvelle réservation reçue</h2>
+    <h2>Nouveau message de contact</h2>
     <ul>
-      <li><strong>Client :</strong> ${_esc(r.clientName)}</li>
-      <li><strong>Service :</strong> ${_esc(r.service)}</li>
-      <li><strong>Date :</strong> ${_esc(r.date)}</li>
-      <li><strong>Heure :</strong> ${_esc(r.time)}</li>
-      <li><strong>Téléphone :</strong> ${_esc(r.phone || "—")}</li>
-      <li><strong>Email :</strong> ${_esc(r.email || "—")}</li>
-      <li><strong>Paiement :</strong> ${_esc(r.paymentMethod || "—")}</li>
-      <li><strong>Statut :</strong> ${_esc(r.status || "—")}</li>
+      <li><strong>Nom :</strong> ${_esc(nom)}</li>
+      <li><strong>Email :</strong> ${_esc(email)}</li>
+      ${telephone ? `<li><strong>Téléphone :</strong> ${_esc(telephone)}</li>` : ""}
     </ul>
+    <h3>Message</h3>
+    <p>${_esc(message).replace(/\n/g, "<br>")}</p>
   `;
+}
+
+async function sendContactEmail(data) {
+  const { nom } = data;
+  await _sendMail(
+    {
+      from: process.env.EMAIL_FROM,
+      to: process.env.EMAIL_OWNER,
+      subject: `Message de contact — ${_esc(nom.trim())}`,
+      html: buildContactEmail(data),
+    },
+    "Message contact",
+  );
 }
 
 module.exports = {
@@ -464,6 +474,7 @@ module.exports = {
   sendReservationCancelledToClient,
   sendNotificationToOwner,
   sendPaymentTimeoutNotificationToOwner,
+  sendContactEmail,
   checkSmtpConnection,
   sendTestEmail,
 };
