@@ -15,6 +15,7 @@ const {
   sendPaymentTimeoutNotificationToOwner,
 } = require("../services/email");
 
+const DEPOSIT_CENTS = 2500;
 const ALLOWED_SLOTS = ["09:00", "16:00"];
 
 function _isValidIsoDate(date) {
@@ -63,7 +64,7 @@ async function getReservation(req, res, next) {
 
 async function createReservationRequest(req, res, next) {
   try {
-    const { clientName, service, date, slot, time, phone, email } =
+    const { clientName, service, date, slot, time, phone, email, lang } =
       req.body || {};
 
     const selectedSlot = (time || slot || "").trim();
@@ -97,6 +98,7 @@ async function createReservationRequest(req, res, next) {
       slot: selectedSlot,
       phone,
       email,
+      lang: lang === 'en' ? 'en' : 'fr', // sauvegardé pour les emails bilingues
       paymentMethod: "interac",
       status: "en_attente",
       amountPaid: null,
@@ -122,7 +124,7 @@ async function createReservationRequest(req, res, next) {
       }
     }, 15 * 60 * 1000);
 
-    return res.status(201).json({ id: reservation.id });
+    return res.status(201).json({ id: reservation.id, lang: reservation.lang });
   } catch (err) {
     next(err);
   }
