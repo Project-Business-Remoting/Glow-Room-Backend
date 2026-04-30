@@ -441,6 +441,22 @@ function buildCancelledEmail(r) {
     <p>Si vous souhaitez reprendre un rendez-vous, vous pouvez réserver à nouveau sur le site.</p>
   `;
 }
+function buildOwnerEmail(r) {
+  return `
+    <h2>Nouvelle réservation reçue</h2>
+    <ul>
+      <li><strong>Client :</strong> ${_esc(r.clientName)}</li>
+      <li><strong>Service :</strong> ${_esc(r.service)}</li>
+      <li><strong>Date :</strong> ${_esc(r.date)}</li>
+      <li><strong>Heure :</strong> ${_esc(r.time)}</li>
+      <li><strong>Téléphone :</strong> ${_esc(r.phone || "—")}</li>
+      <li><strong>Email :</strong> ${_esc(r.email || "—")}</li>
+      <li><strong>Paiement :</strong> ${_esc(r.paymentMethod || "—")}</li>
+      <li><strong>Statut :</strong> ${_esc(r.status || "—")}</li>
+    </ul>
+  `;
+}
+
 
 function buildContactEmail({ nom, email, telephone, message }) {
   return `

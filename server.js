@@ -36,6 +36,9 @@ const slotsLimiter = rateLimit({
 });
 
 const app = express();
+
+// Indispensable pour Render (pour que express-rate-limit lise la bonne IP)
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
