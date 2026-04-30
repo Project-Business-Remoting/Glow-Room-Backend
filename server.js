@@ -74,7 +74,7 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: message });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `Serveur démarré sur le port ${PORT} — env: ${process.env.NODE_ENV || "development"}`,
   );
