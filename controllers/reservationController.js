@@ -5,6 +5,8 @@ const {
   getReservationById,
   listReservationsByDateRange,
   updateReservation,
+  deleteReservation,
+  deleteCancelledReservations,
 } = require("../services/reservationModel");
 
 const {
