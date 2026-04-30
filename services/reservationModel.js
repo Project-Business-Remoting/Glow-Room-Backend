@@ -30,6 +30,7 @@ async function createReservation(data) {
     paymentMethod: data.paymentMethod || "interac",
     amountPaid: typeof data.amountPaid === "number" ? data.amountPaid : null,
     status: data.status || "en_attente",
+    lang: data.lang || "fr",
     createdAt: _nowIso(),
   };
   const ref = await db.collection(COLLECTION).add(doc);
@@ -111,6 +112,24 @@ async function getReservationById(id) {
   return { id: snap.id, ...snap.data() };
 }
 
+async function deleteReservation(id) {
+  await db.collection(COLLECTION).doc(id).delete();
+}
+
+async function deleteCancelledReservations() {
+  const snapshot = await db
+    .collection(COLLECTION)
+    .where("status", "in", ["annulé", "annule", "cancelled", "canceled"])
+    .get();
+
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  await batch.commit();
+  return snapshot.size;
+}
+
 module.exports = {
   createReservation,
   updateReservation,
@@ -120,4 +139,6 @@ module.exports = {
   blockSlot,
   getBusySlotsByDate,
   getReservationById,
+  deleteReservation,
+  deleteCancelledReservations,
 };

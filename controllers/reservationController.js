@@ -214,7 +214,6 @@ async function blockSlotRequest(req, res, next) {
     next(err);
   }
 }
-
 async function getSlotsDisponibles(req, res, next) {
   try {
     const date = req.query?.date;
@@ -230,6 +229,26 @@ async function getSlotsDisponibles(req, res, next) {
   }
 }
 
+
+async function deleteReservationAdmin(req, res, next) {
+  try {
+    const { id } = req.params;
+    await deleteReservation(id);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function emptyTrashAdmin(req, res, next) {
+  try {
+    const count = await deleteCancelledReservations();
+    res.json({ success: true, deletedCount: count });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getReservation,
   createReservationRequest,
@@ -238,4 +257,6 @@ module.exports = {
   getSlotsDisponibles,
   blockSlotRequest,
   listReservationsAdmin,
+  deleteReservationAdmin,
+  emptyTrashAdmin,
 };
