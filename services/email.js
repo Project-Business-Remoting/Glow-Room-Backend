@@ -252,11 +252,12 @@ async function sendTestEmail({ to } = {}) {
 
 async function sendInteracInstructionsToClient(reservation) {
   if (!reservation?.email) return;
+  const isEn = reservation.lang === 'en';
   await _sendMail(
     {
       from: process.env.EMAIL_FROM,
       to: reservation.email,
-      subject: "Instructions Interac — Glow Room Hair",
+      subject: isEn ? "Interac Instructions — Glow Room Hair" : "Instructions Interac — Glow Room Hair",
       html: buildInteracInstructionsEmail(reservation),
     },
     "Instructions client",
@@ -265,11 +266,12 @@ async function sendInteracInstructionsToClient(reservation) {
 
 async function sendReservationConfirmedToClient(reservation) {
   if (!reservation?.email) return;
+  const isEn = reservation.lang === 'en';
   await _sendMail(
     {
       from: process.env.EMAIL_FROM,
       to: reservation.email,
-      subject: "Réservation confirmée — Glow Room Hair",
+      subject: isEn ? "Booking Confirmed — Glow Room Hair" : "Réservation confirmée — Glow Room Hair",
       html: buildConfirmedEmail(reservation),
     },
     "Confirmation client",
@@ -278,11 +280,12 @@ async function sendReservationConfirmedToClient(reservation) {
 
 async function sendReservationCancelledToClient(reservation) {
   if (!reservation?.email) return;
+  const isEn = reservation.lang === 'en';
   await _sendMail(
     {
       from: process.env.EMAIL_FROM,
       to: reservation.email,
-      subject: "Réservation annulée — Glow Room Hair",
+      subject: isEn ? "Booking Cancelled — Glow Room Hair" : "Réservation annulée — Glow Room Hair",
       html: buildCancelledEmail(reservation),
     },
     "Annulation client",
@@ -324,6 +327,31 @@ async function sendPaymentTimeoutNotificationToOwner(reservation) {
 
 function buildInteracInstructionsEmail(r) {
   const interacEmail = process.env.INTERAC_EMAIL || process.env.EMAIL_OWNER;
+  const isEn = r.lang === 'en';
+
+  if (isEn) {
+    return `
+      <h2>Hello ${_esc(r.clientName)}!</h2>
+      <p>We have received your booking request for <strong>Glow Room Hair</strong>.</p>
+      <p>
+        To confirm your appointment, please send a deposit of
+        <strong>${_moneyCADFromCents(DEPOSIT_CENTS)}</strong> via <strong>Interac e-Transfer</strong>
+        to <strong>${_esc(interacEmail)}</strong>.
+      </p>
+      <p style="color: #d9534f; font-weight: bold; padding: 10px; border: 1px solid #d9534f; border-radius: 4px;">
+        ⚠️ IMPORTANT: You have 15 minutes to send the transfer. After this time, the slot will automatically be released.
+      </p>
+      <ul>
+        <li><strong>Service:</strong> ${_esc(r.service)}</li>
+        <li><strong>Date:</strong> ${_esc(r.date)}</li>
+        <li><strong>Time:</strong> ${_esc(r.time)}</li>
+      </ul>
+      <p>Interac Message/Note: <strong>${_esc(r.clientName)}</strong></p>
+      <p>Your booking will be confirmed upon receipt of the payment.</p>
+      <p>Thank you and see you soon!</p>
+    `;
+  }
+
   return `
     <h2>Bonjour ${_esc(r.clientName)} !</h2>
     <p>Nous avons bien reçu votre demande de réservation chez <strong>Glow Room Hair</strong>.</p>
@@ -347,6 +375,21 @@ function buildInteracInstructionsEmail(r) {
 }
 
 function buildConfirmedEmail(r) {
+  const isEn = r.lang === 'en';
+  if (isEn) {
+    return `
+      <h2>Booking Confirmed</h2>
+      <p>Hello ${_esc(r.clientName)}, your appointment at <strong>Glow Room Hair</strong> is confirmed.</p>
+      <ul>
+        <li><strong>Service:</strong> ${_esc(r.service)}</li>
+        <li><strong>Date:</strong> ${_esc(r.date)}</li>
+        <li><strong>Time:</strong> ${_esc(r.time)}</li>
+        <li><strong>Deposit received:</strong> ${_moneyCADFromCents(DEPOSIT_CENTS)} (non-refundable)</li>
+      </ul>
+      <p>Cancellation policy: 24h notice required. 15-minute grace period for lateness.</p>
+      <p>See you soon!</p>
+    `;
+  }
   return `
     <h2>Réservation confirmée</h2>
     <p>Bonjour ${_esc(r.clientName)}, votre rendez-vous chez <strong>Glow Room Hair</strong> est confirmé.</p>
@@ -362,6 +405,26 @@ function buildConfirmedEmail(r) {
 }
 
 function buildCancelledEmail(r) {
+  const isEn = r.lang === 'en';
+  
+  if (isEn) {
+    const reasonTextEn = r.cancelReason 
+      ? `<p><strong>Reason:</strong> ${_esc(r.cancelReason)}</p>`
+      : `<p><strong>Reason:</strong> Payment time exceeded or cancelled at your request.</p>`;
+
+    return `
+      <h2>Booking Cancelled</h2>
+      <p>Hello ${_esc(r.clientName)}, your booking has been cancelled.</p>
+      ${reasonTextEn}
+      <ul>
+        <li><strong>Service:</strong> ${_esc(r.service)}</li>
+        <li><strong>Date:</strong> ${_esc(r.date)}</li>
+        <li><strong>Time:</strong> ${_esc(r.time)}</li>
+      </ul>
+      <p>If you wish to schedule a new appointment, you can book again on the website.</p>
+    `;
+  }
+
   const reasonText = r.cancelReason 
     ? `<p><strong>Raison :</strong> ${_esc(r.cancelReason)}</p>`
     : `<p><strong>Raison :</strong> Délai de paiement dépassé ou annulation à votre demande.</p>`;

@@ -10,9 +10,29 @@ const adminRouter = require("./routes/admin");
 const { getSlotsDisponibles } = require("./controllers/reservationController");
 
 const contactLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 60 * 60 * 1000, // 1 heure
   max: 5,
   message: { error: "Trop de tentatives, réessayez dans une heure" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Max 10 réservations par IP par heure — empêche les bots de bloquer tous les créneaux
+const reservationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 10,
+  message: { error: "Trop de demandes de réservation. Réessayez dans une heure." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 60 vérifications de disponibilité par 5 minutes (navigation dans le calendrier)
+const slotsLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  message: { error: "Trop de requêtes. Attendez quelques minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 const app = express();
@@ -34,9 +54,9 @@ app.get("/health", (req, res) => {
 });
 
 // Alias historique appelé par le frontend
-app.get("/slots-disponibles", getSlotsDisponibles);
+app.get("/slots-disponibles", slotsLimiter, getSlotsDisponibles);
 
-app.use("/reservation", reservationRouter);
+app.use("/reservation", reservationLimiter, reservationRouter);
 app.use("/bloquer-creneau", blockedSlotsRouter);
 app.use("/admin", adminRouter);
 app.use("/contact", contactLimiter, contactRouter);
