@@ -74,6 +74,10 @@ function _esc(str) {
     .replace(/\"/g, "&quot;");
 }
 
+function _sanitizeHeader(str) {
+  return String(str ?? "").replace(/[\r\n\x00-\x1F\x7F]/g, " ").trim();
+}
+
 function _moneyCADFromCents(cents) {
   if (typeof cents !== "number") return "";
   return `${(cents / 100).toFixed(2).replace(".", ",")} $ CAD`;
@@ -297,7 +301,7 @@ async function sendNotificationToOwner(reservation) {
     {
       from: process.env.EMAIL_FROM,
       to: process.env.EMAIL_OWNER,
-      subject: `Nouvelle réservation — ${reservation.clientName}`,
+      subject: `Nouvelle réservation — ${_sanitizeHeader(reservation.clientName)}`,
       html: buildOwnerEmail(reservation),
     },
     "Notification owner",
@@ -309,7 +313,7 @@ async function sendPaymentTimeoutNotificationToOwner(reservation) {
     {
       from: process.env.EMAIL_FROM,
       to: process.env.EMAIL_OWNER,
-      subject: `⚠️ Délai Interac dépassé — ${reservation.clientName}`,
+      subject: `Délai Interac dépasse — ${_sanitizeHeader(reservation.clientName)}`,
       html: `
         <h2>Délai de paiement dépassé (15 min)</h2>
         <p>La réservation de <strong>${_esc(reservation.clientName)}</strong> (ID: ${_esc(reservation.id)}) a été faite il y a 15 minutes.</p>
@@ -477,7 +481,7 @@ async function sendContactEmail(data) {
     {
       from: process.env.EMAIL_FROM,
       to: process.env.EMAIL_OWNER,
-      subject: `Message de contact — ${_esc(nom.trim())}`,
+      subject: `Message de contact — ${_sanitizeHeader(nom)}`,
       html: buildContactEmail(data),
     },
     "Message contact",

@@ -1,7 +1,9 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 const rateLimit = require("express-rate-limit");
+const { startPaymentTimeoutMonitor } = require("./services/scheduler");
 
 const reservationRouter = require("./routes/reservation");
 const contactRouter = require("./routes/contact");
@@ -41,16 +43,16 @@ const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
+app.use(compression());
 app.use(express.json());
 
-app.use((req, res, next) => {
-  cors({
-    origin:
-      process.env.NODE_ENV === "production" ? process.env.FRONTEND_URL : "*",
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Password"],
-  })(req, res, next);
+const corsMiddleware = cors({
+  origin:
+    process.env.NODE_ENV === "production" ? process.env.FRONTEND_URL : "*",
+  methods: ["GET", "POST", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Password"],
 });
+app.use(corsMiddleware);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -81,4 +83,5 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(
     `Serveur démarré sur le port ${PORT} — env: ${process.env.NODE_ENV || "development"}`,
   );
+  startPaymentTimeoutMonitor();
 });

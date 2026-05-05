@@ -3,6 +3,13 @@ const { db } = require("./firebase");
 const COLLECTION = "reservations";
 const BLOCKS_COLLECTION = "blocked_slots";
 
+const _slotsCache = new Map();
+const CACHE_TTL_MS = 60 * 1000;
+
+function invalidateSlotsCache(date) {
+  _slotsCache.delete(date);
+}
+
 function _nowIso() {
   return new Date().toISOString();
 }
@@ -34,6 +41,7 @@ async function createReservation(data) {
     createdAt: _nowIso(),
   };
   const ref = await db.collection(COLLECTION).add(doc);
+  invalidateSlotsCache(data.date);
   return { id: ref.id, ...doc };
 }
 
@@ -87,12 +95,36 @@ async function blockSlot({ date, slot, reason = null }) {
     active: true,
   };
   await ref.set(doc, { merge: true });
+  invalidateSlotsCache(date);
   return { id, ...doc };
 }
 
+async function cancelReservationsBatch(reservations) {
+  if (!reservations.length) return [];
+  const cancelledAt = _nowIso();
+  const cancelReason = "Le créneau a dû être bloqué par le salon.";
+  const batch = db.batch();
+  for (const r of reservations) {
+    const ref = db.collection(COLLECTION).doc(r.id);
+    batch.update(ref, { status: "annulé", cancelledAt, cancelReason });
+  }
+  await batch.commit();
+  const dates = [...new Set(reservations.map((r) => r.date).filter(Boolean))];
+  dates.forEach(invalidateSlotsCache);
+  return reservations.map((r) => ({ ...r, status: "annulé", cancelledAt, cancelReason }));
+}
+
 async function getBusySlotsByDate(date) {
-  const reservations = await listReservationsByDate(date);
-  const blocks = await listBlockedSlotsByDate(date);
+  const cached = _slotsCache.get(date);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
+  const [reservations, blocks] = await Promise.all([
+    listReservationsByDate(date),
+    listBlockedSlotsByDate(date),
+  ]);
+
   const slots = reservations
     .filter((r) => r && !_isCancelledStatus(r.status))
     .map((r) => r.time || r.slot)
@@ -103,7 +135,9 @@ async function getBusySlotsByDate(date) {
     .map((b) => b.slot)
     .filter(Boolean);
 
-  return Array.from(new Set([...slots, ...blockedSlots]));
+  const result = Array.from(new Set([...slots, ...blockedSlots]));
+  _slotsCache.set(date, { data: result, expiresAt: Date.now() + CACHE_TTL_MS });
+  return result;
 }
 
 async function getReservationById(id) {
@@ -141,4 +175,6 @@ module.exports = {
   getReservationById,
   deleteReservation,
   deleteCancelledReservations,
+  cancelReservationsBatch,
+  invalidateSlotsCache,
 };

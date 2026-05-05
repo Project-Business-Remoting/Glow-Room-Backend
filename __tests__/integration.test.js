@@ -197,10 +197,17 @@ describe('POST /reservation', () => {
 // ─── GET /reservation/:id ────────────────────────────────────
 
 describe('GET /reservation/:id', () => {
-  test('retourne les infos de la réservation sans email', async () => {
-    const res = await request(app).get('/reservation/test-reservation-id-123');
+  test('retourne les infos de la réservation sans email (admin)', async () => {
+    const res = await request(app)
+      .get('/reservation/test-reservation-id-123')
+      .set('Authorization', 'Bearer test-admin-password');
     expect(res.statusCode).toBe(200);
     expect(res.body).toHaveProperty('clientName');
     expect(res.body).not.toHaveProperty('email'); // email caché
+  });
+
+  test('retourne 401 sans credentials admin', async () => {
+    const res = await request(app).get('/reservation/test-reservation-id-123');
+    expect(res.statusCode).toBe(401);
   });
 });

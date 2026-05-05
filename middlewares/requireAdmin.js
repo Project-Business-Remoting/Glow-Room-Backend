@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 function requireAdmin(req, res, next) {
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) {
@@ -13,7 +15,16 @@ function requireAdmin(req, res, next) {
     : "";
 
   const provided = token || alt;
-  if (!provided || provided !== expected) {
+  if (!provided) {
+    return res.status(401).json({ error: "Non autorisé" });
+  }
+
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(provided);
+  if (
+    expectedBuf.length !== providedBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, providedBuf)
+  ) {
     return res.status(401).json({ error: "Non autorisé" });
   }
 

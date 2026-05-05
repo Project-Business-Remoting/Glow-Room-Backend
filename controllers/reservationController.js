@@ -7,6 +7,8 @@ const {
   updateReservation,
   deleteReservation,
   deleteCancelledReservations,
+  cancelReservationsBatch,
+  invalidateSlotsCache,
 } = require("../services/reservationModel");
 
 const {
@@ -114,18 +116,6 @@ async function createReservationRequest(req, res, next) {
       console.error("[EMAIL] Notification owner:", err.message),
     );
 
-    // Mettre en place un rappel dans 15 minutes pour la propriétaire
-    setTimeout(async () => {
-      try {
-        const checkRes = await getReservationById(reservation.id);
-        if (checkRes && checkRes.status === "en_attente") {
-          await sendPaymentTimeoutNotificationToOwner(checkRes);
-        }
-      } catch (err) {
-        console.error("[TIMEOUT] Erreur vérification 15min:", err.message);
-      }
-    }, 15 * 60 * 1000);
-
     return res.status(201).json({ id: reservation.id, lang: reservation.lang });
   } catch (err) {
     next(err);
@@ -145,6 +135,8 @@ async function confirmReservation(req, res, next) {
       amountPaid: 2500,
       confirmedAt: new Date().toISOString(),
     });
+
+    invalidateSlotsCache(reservation.date);
 
     sendReservationConfirmedToClient(updated).catch((err) =>
       console.error("[EMAIL] Confirmation client:", err.message),
@@ -170,6 +162,8 @@ async function cancelReservation(req, res, next) {
       status: "annulé",
       cancelledAt: new Date().toISOString(),
     });
+
+    invalidateSlotsCache(reservation.date);
 
     if (reason) updated.cancelReason = reason;
 
@@ -199,15 +193,17 @@ async function blockSlotRequest(req, res, next) {
 
     // Annuler les réservations existantes pour ce créneau
     const allRes = await listReservationsByDateRange({ start: date, end: date });
-    const conflicts = allRes.filter(r => (r.slot === slot || r.time === slot) && r.status !== "annulé");
-    
-    for (const conflict of conflicts) {
-      const updated = await updateReservation(conflict.id, {
-        status: "annulé",
-        cancelledAt: new Date().toISOString(),
-      });
-      updated.cancelReason = "Le créneau a dû être bloqué par le salon.";
-      sendReservationCancelledToClient(updated).catch(e => console.error("[EMAIL] Auto-cancel:", e.message));
+    const conflicts = allRes.filter(
+      (r) => (r.slot === slot || r.time === slot) && r.status !== "annulé",
+    );
+
+    if (conflicts.length > 0) {
+      const cancelled = await cancelReservationsBatch(conflicts);
+      for (const r of cancelled) {
+        sendReservationCancelledToClient(r).catch((e) =>
+          console.error("[EMAIL] Auto-cancel:", e.message),
+        );
+      }
     }
 
     const blocked = await blockSlot({ date, slot, reason: reason || null });
@@ -223,6 +219,9 @@ async function getSlotsDisponibles(req, res, next) {
       return res
         .status(400)
         .json({ error: "Paramètre requis manquant : date" });
+    }
+    if (!_isValidIsoDate(date)) {
+      return res.status(400).json({ error: "Date invalide (YYYY-MM-DD attendu)" });
     }
     const slots = await getBusySlotsByDate(date);
     return res.json({ slots });
