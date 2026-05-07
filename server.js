@@ -4,6 +4,7 @@ const cors = require("cors");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 const { startPaymentTimeoutMonitor } = require("./services/scheduler");
+const { migrateFromEnvIfNeeded } = require("./services/adminConfig");
 
 const reservationRouter = require("./routes/reservation");
 const contactRouter = require("./routes/contact");
@@ -84,4 +85,7 @@ app.listen(PORT, "0.0.0.0", () => {
     `Serveur démarré sur le port ${PORT} — env: ${process.env.NODE_ENV || "development"}`,
   );
   startPaymentTimeoutMonitor();
+  migrateFromEnvIfNeeded().catch((err) =>
+    console.warn("[adminConfig] Migration mot de passe échouée :", err.message)
+  );
 });

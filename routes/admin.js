@@ -5,7 +5,7 @@ const {
   deleteReservationAdmin,
   emptyTrashAdmin,
 } = require("../controllers/reservationController");
-const { getSmtpStatus, testEmail } = require("../controllers/adminController");
+const { getSmtpStatus, testEmail, changePassword } = require("../controllers/adminController");
 const { requireAdmin } = require("../middlewares/requireAdmin");
 
 const router = express.Router();
@@ -25,5 +25,8 @@ router.get("/smtp-status", requireAdmin, getSmtpStatus);
 
 // POST /admin/test-email
 router.post("/test-email", requireAdmin, testEmail);
+
+// PATCH /admin/password — changement de mot de passe autonome
+router.patch("/password", requireAdmin, changePassword);
 
 module.exports = router;

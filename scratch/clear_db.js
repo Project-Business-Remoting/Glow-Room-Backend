@@ -1,4 +1,4 @@
-
+require('dotenv').config();
 const { db } = require('../services/firebase');
 
 async function deleteCollection(collectionPath, batchSize = 100) {

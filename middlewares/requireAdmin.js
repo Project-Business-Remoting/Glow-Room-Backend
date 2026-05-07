@@ -1,34 +1,32 @@
-const crypto = require("crypto");
+const { verifyAdminPassword } = require("../services/adminConfig");
 
-function requireAdmin(req, res, next) {
-  const expected = process.env.ADMIN_PASSWORD;
-  if (!expected) {
-    return res.status(500).json({ error: "ADMIN_PASSWORD non configuré" });
+async function requireAdmin(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ")
+      ? header.slice("Bearer ".length).trim()
+      : "";
+    const alt = req.headers["x-admin-password"]
+      ? String(req.headers["x-admin-password"]).trim()
+      : "";
+
+    const provided = token || alt;
+    if (!provided) {
+      return res.status(401).json({ error: "Non autorisé" });
+    }
+
+    const result = await verifyAdminPassword(provided);
+    if (result === null) {
+      return res.status(500).json({ error: "Mot de passe admin non configuré" });
+    }
+    if (!result) {
+      return res.status(401).json({ error: "Non autorisé" });
+    }
+
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ")
-    ? header.slice("Bearer ".length).trim()
-    : "";
-  const alt = req.headers["x-admin-password"]
-    ? String(req.headers["x-admin-password"]).trim()
-    : "";
-
-  const provided = token || alt;
-  if (!provided) {
-    return res.status(401).json({ error: "Non autorisé" });
-  }
-
-  const expectedBuf = Buffer.from(expected);
-  const providedBuf = Buffer.from(provided);
-  if (
-    expectedBuf.length !== providedBuf.length ||
-    !crypto.timingSafeEqual(expectedBuf, providedBuf)
-  ) {
-    return res.status(401).json({ error: "Non autorisé" });
-  }
-
-  next();
 }
 
 module.exports = { requireAdmin };
