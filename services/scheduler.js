@@ -1,5 +1,6 @@
 const { db } = require("./firebase");
-const { sendPaymentTimeoutNotificationToOwner } = require("./email");
+const { sendPaymentTimeoutNotificationToOwner, sendReservationCancelledToClient } = require("./email");
+const { invalidateSlotsCache } = require("./reservationModel");
 
 const CHECK_INTERVAL_MS = 2 * 60 * 1000;
 const TIMEOUT_MS = 15 * 60 * 1000;
@@ -18,8 +19,21 @@ async function _checkPendingTimeouts() {
     for (const reservation of expired) {
       try {
         await db.collection("reservations").doc(reservation.id).update({
+          status: "annulé",
+          cancelledAt: new Date().toISOString(),
+          cancelReason: "Délai de paiement (15 min) dépassé.",
           timeoutNotifiedAt: new Date().toISOString(),
         });
+
+        // Libérer le créneau dans le cache
+        invalidateSlotsCache(reservation.date);
+
+        // Prévenir le client que c'est annulé automatiquement
+        await sendReservationCancelledToClient(reservation).catch(err => 
+          console.error("[SCHEDULER] Client cancel notification error:", err.message)
+        );
+
+        // Prévenir la propriétaire
         await sendPaymentTimeoutNotificationToOwner(reservation);
       } catch (err) {
         console.error("[SCHEDULER] Timeout notification error:", err.message);
